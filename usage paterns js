@@ -1,0 +1,171 @@
+// --- usage-patterns.js ---
+// This file contains the JavaScript logic for the Manager's
+// "Usage Patterns" page (usage-patterns.html).
+
+const API_BASE_URL = 'http://localhost:3000'; // Matches your server
+
+// +++ NEW: Add a global variable for our chart +++
+let myConsumptionChart = null;
+
+// --- Utility Function to Display Status Messages ---
+function displayMessage(type, message) {
+    console.error(`Error: ${type} - ${message}`);
+}
+
+// +++ NEW: Function to render the bar chart +++
+function renderConsumptionChart(chartData) {
+    const ctx = document.getElementById('consumptionChart');
+    if (!ctx) {
+        console.error('Fatal Error: Canvas with id "consumptionChart" not found.');
+        return;
+    }
+
+    // --- 1. Process the data for Chart.js ---
+    // Your HTML title says "Top 5", so let's slice the data
+    const top5Data = chartData.slice(0, 5);
+
+    // Create labels (e.g., "ABC Holdings (Electricity)")
+    const labels = top5Data.map(item => `${item.CustomerName} (${item.Utility})`);
+    
+    // Extract numerical data.
+    // The API sends "1,299.75 kWh", so we must parse it.
+    const data = top5Data.map(item => {
+        // "1,299.75 kWh" -> "1,299.75"
+        const numberString = item.Consumption.split(' ')[0]; 
+        // "1,299.75" -> 1299.75
+        return parseFloat(numberString.replace(',', '')); 
+    });
+    
+    // Get the unit (e.g., "kWh") from the first item for the tooltip
+    const unit = chartData[0] ? chartData[0].Consumption.split(' ')[1] : 'Units';
+
+    // --- 2. Destroy old chart if it exists ---
+    if (myConsumptionChart) {
+        myConsumptionChart.destroy();
+    }
+
+    // --- 3. Create the new chart ---
+    myConsumptionChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: `Consumption (${unit})`,
+                data: data,
+                // Add some colors
+                backgroundColor: [
+                    'rgba(46, 204, 113, 0.7)', // Green
+                    'rgba(52, 152, 219, 0.7)', // Blue
+                    'rgba(241, 196, 15, 0.7)', // Yellow
+                    'rgba(231, 76, 60, 0.7)',  // Red
+                    'rgba(155, 89, 182, 0.7)'  // Purple
+                ]
+            }]
+        },
+        options: {
+            // +++ Use a horizontal bar chart +++
+            // This is better for long labels
+            indexAxis: 'y', 
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: `Consumption (${unit})`
+                    }
+                }
+            },
+            plugins: {
+                // Hide the legend, it's not needed for one dataset
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.x !== null) {
+                                // Format with commas
+                                label += new Intl.NumberFormat('en-US').format(context.parsed.x) + ` ${unit}`;
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+
+// --- Data Fetching: Load Consumption Data Table (NOW UPDATED) ---
+async function loadConsumptionData() {
+    const tableBody = document.getElementById('consumption-table-body');
+    // +++ NEW: Get the chart container +++
+    const chartContainer = document.querySelector('.chart-wrapper');
+
+    if (!tableBody || !chartContainer) {
+        console.error('Fatal Error: Page elements not found.');
+        return;
+    }
+
+    // Show a loading message
+    tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center;">Loading data...</td></tr>`;
+    // +++ NEW: Clear chart container +++
+    chartContainer.innerHTML = '<canvas id="consumptionChart"></canvas>';
+
+
+    try {
+        const res = await fetch(API_BASE_URL + '/api/consumption-data');
+        if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+        
+        const result = await res.json();
+
+        if (result && result.success && result.data) {
+            tableBody.innerHTML = ''; // Clear loading message
+
+            if (result.data.length === 0) {
+                const noDataMsg = `<tr><td colspan="5" style="text-align: center;">No consumption data found for the last 30 days.</td></tr>`;
+                tableBody.innerHTML = noDataMsg;
+                // +++ NEW: Show "no data" in chart area +++
+                chartContainer.innerHTML = `<p style="text-align: center; padding: 40px;">No consumption data available to display chart.</p>`;
+                return;
+            }
+
+            // Loop through the data and build the table rows
+            result.data.forEach(item => {
+                const row = tableBody.insertRow();
+                row.insertCell().textContent = item.Rank;
+                row.insertCell().textContent = item.CustomerID;
+                row.insertCell().textContent = item.CustomerName;
+                row.insertCell().textContent = item.Utility;
+                row.insertCell().textContent = item.Consumption;
+            });
+
+            // +++ NEW: Call the render chart function! +++
+            renderConsumptionChart(result.data);
+            
+         } else {
+            const message = result.message || 'No data found.';
+            tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center;">${message}</td></tr>`;
+         }
+        
+    } catch (error) {
+        displayMessage('error', error.message);
+        tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: red;">Failed to load data: ${error.message}.</td></tr>`;
+        // +++ NEW: Show error in chart area +++
+        chartContainer.innerHTML = `<p style="text-align: center; padding: 40px; color: red;">Failed to load chart data.</p>`;
+    }
+}
+
+// --- Initialize Event Listeners on Load ---
+document.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('consumption-table-body')) {
+        loadConsumptionData();
+    }
+});
