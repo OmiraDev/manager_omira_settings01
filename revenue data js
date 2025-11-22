@@ -1,0 +1,207 @@
+// --- revenue-data.js ---
+// This file contains the JavaScript logic for the Manager's
+// "Revenue Trends" page.
+
+const API_BASE_URL = 'http://localhost:3000'; // Matches your server
+
+// +++ NEW: Add a global variable to hold our chart instance +++
+let myRevenueChart = null;
+
+// --- Utility Function to format numbers with commas (e.g., 1800000 -> 1,800,000) ---
+function formatNumber(num) {
+    // We'll round to 0 decimal places for the main table, as in your screenshot
+    return new Intl.NumberFormat('en-US', {
+        maximumFractionDigits: 0 
+    }).format(num);
+}
+
+// --- Utility Function to Display Status Messages ---
+function displayMessage(type, message) {
+     console.error(`Error: ${type} - ${message}`);
+}
+
+// +++ NEW: This function builds and renders the chart +++
+function renderRevenueChart(chartData) {
+    // Get the canvas element from our HTML
+    const ctx = document.getElementById('revenueChart');
+    if (!ctx) {
+        console.error('Fatal Error: Canvas with id "revenueChart" not found.');
+        return;
+    }
+
+    // --- 1. Process the data for Chart.js ---
+    // We need to 'unzip' your array of objects into separate arrays
+    const labels = chartData.map(item => item.Month);
+    const electricityData = chartData.map(item => item.Electricity);
+    const waterData = chartData.map(item => item.Water);
+    const gasData = chartData.map(item => item.Gas);
+    const totalData = chartData.map(item => item.TotalRevenue);
+
+    // --- 2. Destroy old chart (if it exists) ---
+    // This is important for live re-loads
+    if (myRevenueChart) {
+        myRevenueChart.destroy();
+    }
+
+    // --- 3. Create the new chart ---
+    myRevenueChart = new Chart(ctx, {
+        type: 'line', // A line chart is best for "trends"
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Total Revenue (Rs.)',
+                    data: totalData,
+                    borderColor: '#3498db', // Blue (matches your theme)
+                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                    borderWidth: 3,       // Make the total line thicker
+                    fill: true,
+                    tension: 0.1          // Makes the line slightly curved
+                },
+                {
+                    label: 'Electricity (Rs.)',
+                    data: electricityData,
+                    borderColor: '#f1c40f', // Yellow
+                    borderWidth: 1.5,
+                    tension: 0.1
+                },
+                {
+                    label: 'Water (Rs.)',
+                    data: waterData,
+                    borderColor: '#2ecc71', // Green
+                    borderWidth: 1.5,
+                    tension: 0.1
+                },
+                {
+                    label: 'Gas (Rs.)',
+                    data: gasData,
+                    borderColor: '#e74c3c', // Red
+                    borderWidth: 1.5,
+                    tension: 0.1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false, // Allows chart to fill the 400px wrapper
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        // Use your existing formatNumber function for the Y-axis!
+                        callback: function(value) {
+                            return 'Rs. ' + formatNumber(value);
+                        }
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        // Format the tooltip numbers
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                label += 'Rs. ' + formatNumber(context.parsed.y);
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+
+// --- Data Fetching: Load Revenue Data Table ---
+async function loadRevenueData() {
+    const tableBody = document.getElementById('revenue-table-body');
+    const tableFoot = document.getElementById('revenue-table-footer');
+    // +++ NEW: Get the chart container to show "no data" message +++
+    const chartContainer = document.querySelector('.chart-wrapper');
+
+    if (!tableBody || !tableFoot || !chartContainer) {
+        console.error('Fatal Error: Page elements not found.');
+        return;
+    }
+
+    // Show a loading message
+    tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center;">Loading data...</td></tr>`;
+    tableFoot.innerHTML = ''; // Clear footer
+    // +++ NEW: Clear chart container +++
+    chartContainer.innerHTML = '<canvas id="revenueChart"></canvas>';
+
+    // --- Variables to calculate totals ---
+    let totalElectricity = 0;
+    let totalWater = 0;
+    let totalGas = 0;
+    let grandTotal = 0;
+
+    try {
+        const res = await fetch(API_BASE_URL + '/api/revenue-trends');
+        if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+        const result = await res.json();
+
+        if (result && result.success && result.data) {
+            tableBody.innerHTML = ''; // Clear loading message
+
+            if (result.data.length === 0) {
+                const noDataMsg = `<tr><td colspan="5" style="text-align: center;">No revenue data found for the last 6 months.</td></tr>`;
+                tableBody.innerHTML = noDataMsg;
+                // +++ NEW: Show "no data" message in chart area too +++
+                chartContainer.innerHTML = `<p style="text-align: center; padding: 40px;">No revenue data available to display chart.</p>`;
+                return;
+            }
+
+            // Loop through the data and build the table rows
+            result.data.forEach(item => {
+                // (This is your existing, working code for the table)
+                totalElectricity += item.Electricity;
+                totalWater += item.Water;
+                totalGas += item.Gas;
+                grandTotal += item.TotalRevenue;
+
+                const row = tableBody.insertRow();
+                row.insertCell().textContent = item.Month;
+                row.insertCell().textContent = formatNumber(item.Electricity);
+                row.insertCell().textContent = formatNumber(item.Water);
+                row.insertCell().textContent = formatNumber(item.Gas);
+                row.insertCell().textContent = formatNumber(item.TotalRevenue);
+            });
+            
+            // --- After the loop, build the Total row in the footer ---
+            tableFoot.innerHTML = `
+                <tr style="background-color: #f4f7f6; font-weight: bold;">
+                    <th>Total</th>
+                    <th>${formatNumber(totalElectricity)}</th>
+                    <th>${formatNumber(totalWater)}</th>
+                    <th>${formatNumber(totalGas)}</th>
+                    <th>${formatNumber(grandTotal)}</th>
+                </tr>
+            `;
+            
+            // +++ NEW: Call the render chart function! +++
+            // Pass the same data we used for the table.
+            renderRevenueChart(result.data);
+            
+        } else {
+            const message = result.message || 'No data found.';
+            tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center;">${message}</td></tr>`;
+        }
+        
+    } catch (error) {
+        displayMessage('error', error.message);
+        tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: red;">Failed to load data: ${error.message}.</td></tr>`;
+        // +++ NEW: Show error in chart area too +++
+        chartContainer.innerHTML = `<p style="text-align: center; padding: 40px; color: red;">Failed to load chart data.</p>`;
+    }
+}
+
+// --- Initialize Event Listeners on Load ---
+document.addEventListener('DOMContentLoaded', () => {
+    loadRevenueData();
+});
