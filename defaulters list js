@@ -1,0 +1,114 @@
+
+// --- manager.js ---
+
+// This file contains the JavaScript logic for the Manager's
+
+// "Defaulters Report" page (defaulters-list.html).
+
+const API_BASE_URL = 'http://localhost:3000'; // Make sure this matches your Node.js server port
+// --- Utility Function to Handle API Communication ---
+// (Copied from app.js for consistency)
+async function sendData(endpoint, data) {
+    try {
+        const response = await fetch(API_BASE_URL + endpoint, {
+            method: 'POST',
+            headers: {
+               'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+
+            throw new Error(errorData.message || `API call failed with status: ${response.status}`);
+        }
+
+        return await response.json();
+
+    } catch (error) {
+
+        console.error("API Communication Error:", error);
+
+        displayMessage('error', error.message || 'Network error. Is the Node.js server running?');
+
+        return null;
+    }
+}
+
+// --- Utility Function to Display Status Messages ---
+
+// (Copied from app.js for consistency)
+
+// This page doesn't have a ".form-message" box, so this will
+// log errors to the console.
+function displayMessage(type, message) {
+
+    console.error(`Error: ${type} - ${message}`);
+
+    // You could add a <div id="form-status"></div> to your HTML
+
+    // if you want to show messages on the page.
+}
+// --- Data Fetching: Load Defaulters Table Data ---
+async function loadDefaulters() {
+
+    const tableBody = document.getElementById('defaulters-table-body');
+
+    if (!tableBody) {
+
+        console.error('Fatal Error: Table body with id "defaulters-table-body" not found.');
+
+        return;
+    }
+    try {
+
+        // This is a GET request, so we use 'fetch' directly
+
+        const res = await fetch(API_BASE_URL + '/api/defaulters');
+        if (!res.ok) {
+
+            throw new Error(`HTTP error! Status: ${res.status}`);
+
+        }
+        const result = await res.json();
+        if (result && result.success && result.data) {
+
+            tableBody.innerHTML = ''; // Clear existing data
+            if (result.data.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center;">No defaulters found.</td></tr>`;
+                return;
+            }
+            result.data.forEach(customer => {
+
+                const row = tableBody.insertRow();
+               row.insertCell().textContent = customer.CustomerID;
+                row.insertCell().textContent = customer.CustomerName;
+                row.insertCell().textContent = customer.Phone;
+                row.insertCell().textContent = customer.CustomerType;
+                row.insertCell().textContent = customer.UnpaidBills;
+               row.insertCell().textContent = customer.TotalDue.toFixed(2);
+            });
+
+        } else {
+            const message = result.message || 'No defaulter data found in the database.';
+
+            tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center;">${message}</td></tr>`;
+        }      
+    } catch (error) {
+        // Use our new utility function to log the error
+
+        displayMessage('error', error.message);
+        tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: red;">Failed to load data: ${error.message}. Ensure API is running.</td></tr>`;
+    }
+}
+// --- Initialize Event Listeners on Load ---
+document.addEventListener('DOMContentLoaded', () => {
+    // This page has no forms, so we don't need the form submission handler.
+    // We just load the data.
+    if (document.getElementById('defaulters-table-body')) {
+        loadDefaulters();
+
+    }
+});
+
