@@ -1,0 +1,234 @@
+// This file contains the primary JavaScript logic for the UMS dashboard forms,
+// handling form submissions, data fetching, and communication with the API server.
+
+const API_BASE_URL = 'http://localhost:3000'; // Make sure this matches your Node.js server port
+
+// --- Utility Function to Handle API Communication ---
+async function sendData(endpoint, data) {
+    try {
+        const response = await fetch(API_BASE_URL + endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        });
+
+        // Check for non-2xx response status (e.g., 400, 500)
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || `API call failed with status: ${response.status}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("API Communication Error:", error);
+        displayMessage('error', error.message || 'Network error. Is the Node.js server running?');
+        return null;
+    }
+}
+
+// --- Utility Function to Display Status Messages ---
+function displayMessage(type, message, formElement = null) {
+    const container = formElement ? formElement.querySelector('.form-message') : document.querySelector('#form-status');
+    if (!container) return;
+
+    container.textContent = message;
+    container.className = `form-message ${type}`;
+
+    setTimeout(() => {
+        container.textContent = '';
+        container.className = '';
+    }, 5000);
+}
+
+// --- Data Fetching: Load Customer Table Data ---
+async function loadCustomers() {
+    const tableBody = document.getElementById('customer-table-body');
+    if (!tableBody) return;
+
+    try {
+        const res = await fetch(API_BASE_URL + '/getCustomers');
+        if (!res.ok) throw new Error(`HTTP status ${res.status}`);
+        const result = await res.json();
+
+        if (result && result.success && result.data) {
+            tableBody.innerHTML = '';
+
+            result.data.forEach(customer => {
+                const row = tableBody.insertRow();
+                row.insertCell().textContent = customer.CustomerID;
+                row.insertCell().textContent = customer.CustomerName;
+                row.insertCell().textContent = customer.CustomerType;
+                row.insertCell().textContent = customer.Email || 'N/A';
+                row.insertCell().textContent = customer.Phone;
+                row.insertCell().textContent = customer.ServiceAddress;
+
+                const actionCell = row.insertCell();
+                actionCell.innerHTML = `
+                    <a href="edit-customer.html?id=${customer.CustomerID}">
+                        <button class="btn-action btn-edit">Edit</button>
+                    </a>
+                    <button class="btn-action btn-delete">Delete</button>
+                `;
+            });
+        } else {
+            tableBody.innerHTML = '<tr><td colspan="7">No customer data found in the database.</td></tr>';
+        }
+    } catch (error) {
+        console.error("Customer Data Load Error:", error);
+        tableBody.innerHTML = `<tr><td colspan="7" class="text-error">Failed to load data: ${error.message}. Ensure API is running.</td></tr>`;
+    }
+}
+
+// --- Data Fetching: Load Meter Table Data ---
+async function loadMeters() {
+    const tableBody = document.getElementById('meter-table-body');
+    if (!tableBody) return;
+
+    try {
+        const res = await fetch(API_BASE_URL + '/getMeters');
+        if (!res.ok) throw new Error(`HTTP status ${res.status}`);
+        const result = await res.json();
+
+        if (result && result.success && result.data) {
+            tableBody.innerHTML = '';
+
+            result.data.forEach(meter => {
+                const row = tableBody.insertRow();
+                row.insertCell().textContent = meter.MeterID;
+                row.insertCell().textContent = meter.CustomerID;
+                row.insertCell().textContent = meter.UtilityType;
+                row.insertCell().textContent = meter.Status;
+                row.insertCell().textContent = meter.Location;
+
+                const actionCell = row.insertCell();
+                actionCell.innerHTML = `
+                    <a href="edit-meter.html?id=${meter.MeterID}">
+                        <button class="btn-action btn-edit">Edit</button>
+                    </a>
+                    <button class="btn-action btn-delete">Delete</button>
+                `;
+            });
+        } else {
+            tableBody.innerHTML = '<tr><td colspan="6">No meter data found in the database.</td></tr>';
+        }
+    } catch (error) {
+        console.error("Meter Data Load Error:", error);
+        tableBody.innerHTML = `<tr><td colspan="6" class="text-error">Failed to load data: ${error.message}. Ensure API is running.</td></tr>`;
+    }
+}
+
+// --- Data Fetching: Load Tariff Table Data ---
+async function loadTariffs() {
+    const tableBody = document.getElementById('tariff-table-body');
+    if (!tableBody) return;
+
+    try {
+        const res = await fetch(API_BASE_URL + '/getTariffs');
+        if (!res.ok) throw new Error(`HTTP status ${res.status}`);
+        const result = await res.json();
+
+        if (result && result.success && result.data) {
+            tableBody.innerHTML = '';
+
+            result.data.forEach(tariff => {
+                const row = tableBody.insertRow();
+                row.insertCell().textContent = tariff.TariffID;
+                row.insertCell().textContent = tariff.UtilityID;
+                row.insertCell().textContent = tariff.TariffName;
+                row.insertCell().textContent = tariff.Rate;
+                row.insertCell().textContent = `${tariff.MinUnits} - ${tariff.MaxUnits || '∞'}`;
+
+                const actionCell = row.insertCell();
+                actionCell.innerHTML = `
+                    <a href="edit-tariff.html?id=${tariff.TariffID}">
+                        <button class="btn-action btn-edit">Edit</button>
+                    </a>
+                    <button class="btn-action btn-delete">Delete</button>
+                `;
+            });
+        } else {
+            tableBody.innerHTML = '<tr><td colspan="6">No tariff data found in the database.</td></tr>';
+        }
+    } catch (error) {
+        console.error("Tariff Data Load Error:", error);
+        tableBody.innerHTML = `<tr><td colspan="6" class="text-error">Failed to load data: ${error.message}. Ensure API is running.</td></tr>`;
+    }
+}
+
+// --- Main Form Submission Handler ---
+function handleFormSubmission(event) {
+    event.preventDefault();
+
+    const form = event.target;
+    const formId = form.id;
+    const formData = Object.fromEntries(new FormData(form).entries());
+
+    let endpoint = '';
+    let successMessage = '';
+
+    if (formId === 'add-customer-form') {
+        endpoint = '/addCustomer';
+        successMessage = 'Customer registered successfully! Refreshing data...';
+    } else if (formId === 'record-payment-form') {
+        endpoint = '/recordPayment';
+        successMessage = 'Payment recorded and balance updated! Refreshing data...';
+    } else if (formId === 'add-meter-form') {
+        endpoint = '/addMeter';
+        successMessage = 'New meter registered and linked to customer! Refreshing data...';
+    } else if (formId === 'add-tariff-form') {
+        endpoint = '/addTariff';
+        successMessage = 'New tariff plan saved! Refreshing data...';
+    } else if (formId === 'generate-bill-form') {
+        endpoint = '/generateBill';
+        successMessage = 'Bill calculation requested. Check Outstanding Bills list.';
+    } else if (formId === 'submit-reading-form') {
+        endpoint = '/submitReading';
+        successMessage = 'Meter reading submitted successfully!';
+    } else if (formId === 'edit-customer-form') {
+        endpoint = '/updateCustomer';
+        successMessage = 'Customer details updated successfully!';
+    } else if (formId === 'edit-meter-form') {
+        endpoint = '/updateMeter';
+        successMessage = 'Meter details updated successfully!';
+    } else if (formId === 'edit-tariff-form') {
+        endpoint = '/updateTariff';
+        successMessage = 'Tariff plan updated successfully!';
+    } else {
+        console.warn(`No handler for form ID: ${formId}`);
+        displayMessage('warning', 'Form action not yet implemented.', form);
+        return;
+    }
+
+    sendData(endpoint, formData).then(result => {
+        if (result && result.success) {
+            displayMessage('success', successMessage, form);
+            form.reset();
+
+            if (endpoint.includes('Customer')) {
+                loadCustomers();
+            } else if (endpoint.includes('Meter')) {
+                loadMeters();
+            } else if (endpoint.includes('Tariff')) {
+                loadTariffs();
+            }
+        }
+    });
+}
+
+// --- Initialize Event Listeners on Load ---
+document.addEventListener('DOMContentLoaded', () => {
+    const allDataForms = document.querySelectorAll('form.data-form');
+
+    allDataForms.forEach(form => {
+        if (!form.id) {
+            form.id = 'form-' + Math.random().toString(36).substr(2, 9);
+        }
+        form.addEventListener('submit', handleFormSubmission);
+    });
+
+    if (document.getElementById('customer-table-body')) loadCustomers();
+    if (document.getElementById('meter-table-body')) loadMeters();
+    if (document.getElementById('tariff-table-body')) loadTariffs();
+});
