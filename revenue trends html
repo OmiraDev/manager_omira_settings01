@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Revenue Trends - UMS</title>
+    
+    <link rel="stylesheet" href="style.css">
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h3>UMS Manager</h3>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="manager-dashboard.html" class="nav-item">Reports Dashboard</a>
+                <a href="revenue-trends.html" class="nav-item active">Revenue Trends</a>
+                <a href="defaulters-list.html" class="nav-item">Defaulters List</a>
+                <a href="usage-patterns.html" class="nav-item">Usage Patterns</a>
+                <a href="login.html" class="nav-item">Logout</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="main-header">
+                <h1>Revenue Trends</h1>
+            </header>
+
+            <div class="content-area">
+                
+                <div class="chart-container">
+                    <h3>Monthly Revenue (Last 6 Months)</h3>
+                    
+                    <div class="chart-wrapper" style="height: 400px; position: relative;">
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+
+                </div>
+
+                <div style="height: 30px;"></div>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3>Revenue Data (Last 6 Months)</h3>
+                    </div>
+                    
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Month</th>
+                                <th>Electricity (Rs.)</th>
+                                <th>Water (Rs.)</th>
+                                <th>Gas (Rs.)</th>
+                                <th>Total Revenue (Rs.)</th>
+                            </tr>
+                        </thead>
+                        
+                        <tbody id="revenue-table-body">
+                            </tbody>
+                        
+                        <tfoot id="revenue-table-footer">
+                             </tfoot>
+
+                    </table>
+                </div>
+                
+            </div>
+        </main>
+    </div>
+
+    <script src="revenue-data.js"></script>
+
+</body>
+</html>
