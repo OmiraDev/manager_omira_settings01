@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager Dashboard - UMS</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h3>UMS Manager</h3>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="manager-dashboard.html" class="nav-item active">Reports Dashboard</a>
+                <a href="revenue-trends.html" class="nav-item">Revenue Trends</a>
+                <a href="defaulters-list.html" class="nav-item">Defaulters List</a>
+                <a href="usage-patterns.html" class="nav-item">Usage Patterns</a>
+                <a href="login.html" class="nav-item">Logout</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="main-header">
+                <h1>Welcome, Manager</h1>
+            </header>
+
+            <div class="content-area">
+                
+                <div class="form-container">
+                    <h3>Generate Report</h3>
+                    <p>Select a report type and date range to analyze system data.</p>
+                    
+                    <form class="data-form">
+                        <div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr;">
+                            
+                            <div class="input-group">
+                                <label for="report-type">Report Type</label>
+                                <select id="report-type" name="report-type" required>
+                                    <option value="revenue">Revenue Collections</option>
+                                    <option value="defaulters">Defaulters (Unpaid Bills)</option>
+                                    <option value="usage">Top Consumers / Usage Patterns</option>
+                                </select>
+                            </div>
+
+                            <div class="input-group">
+                                <label for="start-date">Start Date</label>
+                                <input type="date" id="start-date" name="start-date" required>
+                            </div>
+
+                            <div class="input-group">
+                                <label for="end-date">End Date</label>
+                                <input type="date" id="end-date" name="end-date" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="submit" class="submit-button">Generate Report</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div style="height: 30px;"></div>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3>Report</h3>
+                    </div>
+                    
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="4" style="text-align: center;">Please generate a report to see data.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.querySelector('.data-form');
+            const reportTitle = document.querySelector('.table-container .table-header h3');
+            const tableHead = document.querySelector('.data-table thead tr');
+            const tableBody = document.querySelector('.data-table tbody');
+            const submitButton = document.querySelector('.submit-button');
+            const tableContainer = document.querySelector('.table-container');
+
+            // Clear the sample data on load
+            tableHead.innerHTML = '';
+            tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Please generate a report to see data.</td></tr>';
+
+
+            form.addEventListener('submit', handleReportGeneration);
+
+            async function handleReportGeneration(event) {
+                event.preventDefault();
+                
+                const reportType = document.getElementById('report-type').value;
+                const startDate = document.getElementById('start-date').value;
+                const endDate = document.getElementById('end-date').value;
+
+                if (!startDate || !endDate) {
+                    alert('Please select a start and end date.');
+                    return;
+                }
+
+                // --- 1. Show Loading State ---
+                submitButton.textContent = 'Generating...';
+                submitButton.disabled = true;
+                tableHead.innerHTML = ''; // Clear headers
+                tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Loading report data...</td></tr>';
+                
+                try {
+                    // --- 2. Fetch Data from the new API endpoint ---
+                    const response = await fetch(`http://localhost:3000/api/reports?type=${reportType}&start=${startDate}&end=${endDate}`);
+                    
+                    if (!response.ok) {
+                        throw new Error(`Server error: ${response.statusText}`);
+                    }
+
+                    const result = await response.json();
+
+                    if (!result.success || result.data.length === 0) {
+                        // Clear the headers and title if no data
+                        tableHead.innerHTML = '';
+                        reportTitle.textContent = 'Report';
+                        tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No data found for the selected criteria.</td></tr>';
+                        return;
+                    }
+
+                    // --- 3. Display Data Based on Report Type ---
+                    switch (reportType) {
+                        case 'revenue':
+                            displayRevenueReport(result);
+                            break;
+                        case 'defaulters':
+                            displayDefaultersReport(result);
+                            break;
+                        case 'usage':
+                            displayUsageReport(result);
+                            break;
+                    }
+
+                } catch (error) {
+                    console.error('Failed to fetch report:', error);
+                    tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: red;">Failed to load report. Check console.</td></tr>`;
+                } finally {
+                    // --- 4. Reset Button ---
+                    submitButton.textContent = 'Generate Report';
+                    submitButton.disabled = false;
+                }
+            }
+            
+            // Helper function for number formatting
+            function formatCurrency(num) {
+                // Ensure num is a number, default to 0 if not
+                const numericValue = Number(num);
+                if (isNaN(numericValue)) {
+                    return '0.00';
+                }
+                return numericValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            // --- Display Function for Revenue ---
+            function displayRevenueReport(result) {
+                reportTitle.textContent = 'Report: Revenue Collections';
+                
+                // Update Headers
+                tableHead.innerHTML = `
+                    <th>Date</th>
+                    <th>Utility</th>
+                    <th>Payments Received</th>
+                    <th>Total (Rs.)</th>
+                `;
+
+                // Update Body
+                let rowsHtml = result.data.map(row => `
+                    <tr>
+                        <td>${row.Date}</td>
+                        <td>${row.Utility}</td>
+                        <td>${row.PaymentsReceived}</td>
+                        <td>${formatCurrency(row.Total)}</td>
+                    </tr>
+                `).join('');
+
+                // Add Total Row
+                rowsHtml += `
+                    <tr>
+                        <td colspan="3" style="font-weight: bold; text-align: right;">Total Revenue:</td>
+                        <td style="font-weight: bold;">${formatCurrency(result.total)}</td>
+                    </tr>
+                `;
+                
+                // --- FIX: Corrected variable name from rows.html to rowsHtml ---
+                tableBody.innerHTML = rowsHtml;
+            }
+
+            // --- Display Function for Defaulters ---
+            function displayDefaultersReport(result) {
+                reportTitle.textContent = 'Report: Defaulters (Unpaid Bills)';
+                
+                // Update Headers
+                tableHead.innerHTML = `
+                    <th>Customer ID</th>
+                    <th>Customer Name</th>
+                    <th>Phone</th>
+                    <th>Unpaid Bills</th>
+                    <th>Total Due (Rs.)</th>
+                `;
+
+                // Update Body
+                let rowsHtml = result.data.map(row => `
+                    <tr>
+                        <td>${row.CustomerID}</td>
+                        <td>${row.CustomerName}</td>
+                        <td>${row.Phone}</td>
+                        <td>${row.UnpaidBills}</td>
+                        <td>${formatCurrency(row.TotalDue)}</td>
+                    </tr>
+                `).join('');
+
+                // Add Total Row
+                rowsHtml += `
+                    <tr>
+                        <td colspan="4" style="font-weight: bold; text-align: right;">Total Amount Due:</td>
+                        <td style="font-weight: bold;">${formatCurrency(result.total)}</td>
+                    </tr>
+                `;
+                tableBody.innerHTML = rowsHtml;
+            }
+
+            // --- Display Function for Top Consumers ---
+            function displayUsageReport(result) {
+                reportTitle.textContent = 'Report: Top Consumers / Usage Patterns';
+                
+                // Update Headers
+                tableHead.innerHTML = `
+                    <th>Rank</th>
+                    <th>Customer ID</th>
+                    <th>Customer Name</th>
+                    <th>Utility</th>
+                    <th>Consumption</th>
+                `;
+
+                // Update Body
+                tableBody.innerHTML = result.data.map(row => `
+                    <tr>
+                        <td>${row.Rank}</td>
+                        <td>${row.CustomerID}</td>
+                        <td>${row.CustomerName}</td>
+                        <td>${row.Utility}</td>
+                        <td>${row.Consumption}</td>
+                    </tr>
+                `).join('');
+                // No total row for this report
+            }
+        });
+    </script>
+    </body>
+</html>
